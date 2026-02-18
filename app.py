@@ -2,7 +2,7 @@ import streamlit as st
 import yfinance as yf
 import pandas as pd
 
-st.title("Personal Stock Screening Tool")
+st.title("Stock Screening Tool")
 
 st.write("⚠️ Use NSE format only (Example: RELIANCE.NS)")
 
@@ -96,3 +96,4 @@ if stock_symbol:
 
                 st.subheader("Price Chart")
                 st.line_chart(data["Close"])
+
