@@ -2,7 +2,7 @@ import streamlit as st
 import yfinance as yf
 import pandas as pd
 
-st.title("Stock Screening Tool")
+st.title("Personal Stock Screening Tool")
 
 st.write("⚠️ Use NSE format only (Example: RELIANCE.NS)")
 
@@ -10,38 +10,23 @@ stock_symbol = st.text_input("Enter Stock Symbol").upper().strip()
 
 if stock_symbol:
 
-    # Strict rule: Must end with .NS
     if not stock_symbol.endswith(".NS"):
         st.error("Invalid format. Use NSE format like RELIANCE.NS")
     else:
         stock = yf.Ticker(stock_symbol)
 
-        try:
-            info = stock.info
-        except:
-            st.error("Unable to fetch stock information.")
-            st.stop()
+        # Fetch only price data (more reliable)
+        data = stock.history(period="max")
 
-        # Strict validation checks
-        if (
-            "regularMarketPrice" not in info
-            or info["regularMarketPrice"] is None
-            or "longName" not in info
-        ):
-            st.error("Invalid or unsupported stock symbol.")
+        if data.empty:
+            st.error("Unable to fetch stock data. Try again later.")
         else:
-            # Check recent trading activity (last 10 days)
+            # Recent activity check
             recent_data = stock.history(period="10d")
 
             if recent_data.empty:
                 st.error("Stock not actively trading or invalid.")
             else:
-                data = stock.history(period="max")
-
-                company_name = info.get("longName", "N/A")
-                exchange = info.get("exchange", "N/A")
-                currency = info.get("currency", "INR")
-
                 current_price = data["Close"].iloc[-1]
                 ath = data["Close"].max()
 
@@ -60,14 +45,16 @@ if stock_symbol:
                     / one_year_data["Close"].iloc[0]
                 ) * 100
 
+                # Fallback name (symbol itself)
+                company_name = stock_symbol.replace(".NS", "")
+
                 st.subheader("Company Information")
-                st.write(f"Company Name: {company_name}")
-                st.write(f"Exchange: {exchange}")
-                st.write(f"Currency: {currency}")
+                st.write(f"Stock Symbol: {stock_symbol}")
+                st.write(f"Display Name: {company_name}")
 
                 st.subheader("Stock Data")
-                st.write(f"Current Price: {current_price:.2f} {currency}")
-                st.write(f"All Time High: {ath:.2f} {currency}")
+                st.write(f"Current Price: ₹{current_price:.2f}")
+                st.write(f"All Time High: ₹{ath:.2f}")
                 st.write(f"Distance from ATH: {distance_from_ath:.2f}%")
                 st.write(f"6 Month Return: {six_month_return:.2f}%")
                 st.write(f"1 Year Return: {one_year_return:.2f}%")
@@ -96,4 +83,3 @@ if stock_symbol:
 
                 st.subheader("Price Chart")
                 st.line_chart(data["Close"])
-
