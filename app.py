@@ -1,6 +1,7 @@
 import streamlit as st
 import yfinance as yf
 import pandas as pd
+import requests
 
 st.title("Personal Stock Screening Tool")
 
@@ -8,25 +9,50 @@ st.write("⚠️ Use NSE format only (Example: RELIANCE.NS)")
 
 stock_symbol = st.text_input("Enter Stock Symbol").upper().strip()
 
+
+# 🔹 Function to safely get company name (cloud-safe)
+def get_company_name(symbol):
+    try:
+        url = f"https://query1.finance.yahoo.com/v1/finance/search?q={symbol}"
+        response = requests.get(url, timeout=5)
+        data = response.json()
+
+        if "quotes" in data and len(data["quotes"]) > 0:
+            return data["quotes"][0].get("longname") or data["quotes"][0].get("shortname")
+    except:
+        return None
+
+
 if stock_symbol:
 
+    # Strict NSE validation
     if not stock_symbol.endswith(".NS"):
         st.error("Invalid format. Use NSE format like RELIANCE.NS")
+
     else:
         stock = yf.Ticker(stock_symbol)
 
-        # Fetch only price data (more reliable)
+        # Get historical data (stable)
         data = stock.history(period="max")
 
         if data.empty:
             st.error("Unable to fetch stock data. Try again later.")
+
         else:
-            # Recent activity check
+            # Check recent activity
             recent_data = stock.history(period="10d")
 
             if recent_data.empty:
                 st.error("Stock not actively trading or invalid.")
+
             else:
+                # 🔹 Get company name safely
+                company_name = get_company_name(stock_symbol)
+
+                if not company_name:
+                    company_name = stock_symbol.replace(".NS", "")
+
+                # Calculations
                 current_price = data["Close"].iloc[-1]
                 ath = data["Close"].max()
 
@@ -45,12 +71,10 @@ if stock_symbol:
                     / one_year_data["Close"].iloc[0]
                 ) * 100
 
-                # Fallback name (symbol itself)
-                company_name = stock_symbol.replace(".NS", "")
-
+                # Display
                 st.subheader("Company Information")
                 st.write(f"Stock Symbol: {stock_symbol}")
-                st.write(f"Display Name: {company_name}")
+                st.write(f"Company Name: {company_name}")
 
                 st.subheader("Stock Data")
                 st.write(f"Current Price: ₹{current_price:.2f}")
