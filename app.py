@@ -3,7 +3,7 @@ import yfinance as yf
 import pandas as pd
 import requests
 
-st.title("Personal Stock Screening Tool")
+st.title("Stock Search Tool")
 
 st.write("⚠️ Use NSE format only (Example: RELIANCE.NS)")
 
