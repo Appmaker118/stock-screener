@@ -1,34 +1,40 @@
 import streamlit as st
 import yfinance as yf
 import pandas as pd
+import time
 
-st.title("Stock Search Tool")
+st.title("Personal Stock Screening Tool")
 
 st.write("⚠️ Use NSE format only (Example: RELIANCE.NS)")
 
+
+# ✅ Cached + Retry function for INFO
+@st.cache_data(ttl=3600)  # cache for 1 hour
+def fetch_info_with_retry(symbol, retries=3, delay=2):
+    stock = yf.Ticker(symbol)
+
+    for attempt in range(retries):
+        try:
+            info = stock.info
+            if info and "longName" in info:
+                return info
+        except:
+            pass
+
+        if attempt < retries - 1:
+            time.sleep(delay)
+
+    return None
+
+
+# ✅ Cached price data
+@st.cache_data(ttl=3600)
+def fetch_history(symbol, period):
+    stock = yf.Ticker(symbol)
+    return stock.history(period=period)
+
+
 stock_symbol = st.text_input("Enter Stock Symbol").upper().strip()
-
-# -------------------------------
-# ⚡ Cached INFO fetch (prevents crashes)
-# -------------------------------
-@st.cache_data(ttl=86400)
-def get_stock_info(symbol):
-    try:
-        stock = yf.Ticker(symbol)
-        return stock.info
-    except:
-        return None
-
-# -------------------------------
-# ⚡ Cached HISTORY fetch
-# -------------------------------
-@st.cache_data(ttl=600)
-def get_stock_history(symbol, period):
-    try:
-        stock = yf.Ticker(symbol)
-        return stock.history(period=period)
-    except:
-        return pd.DataFrame()
 
 if stock_symbol:
 
@@ -37,44 +43,26 @@ if stock_symbol:
         st.error("Invalid format. Use NSE format like RELIANCE.NS")
     else:
 
-        # -------------------------------
-        # Fetch info safely
-        # -------------------------------
-        info = get_stock_info(stock_symbol)
+        # ✅ Fetch info (cached + retry)
+        info = fetch_info_with_retry(stock_symbol)
 
         if not info:
-            st.error("Unable to fetch stock information.")
+            st.error("Unable to fetch stock information (API issue). Please try again.")
             st.stop()
 
-        # Strict validation checks
-        if (
-            "regularMarketPrice" not in info
-            or info["regularMarketPrice"] is None
-            or "longName" not in info
-        ):
+        # ✅ Validation
+        if not info.get("regularMarketPrice") or not info.get("longName"):
             st.error("Invalid or unsupported stock symbol.")
         else:
-            # -------------------------------
             # Check recent trading activity
-            # -------------------------------
-            recent_data = get_stock_history(stock_symbol, "10d")
+            recent_data = fetch_history(stock_symbol, "10d")
 
             if recent_data.empty:
                 st.error("Stock not actively trading or invalid.")
             else:
-                # -------------------------------
-                # Full historical data
-                # -------------------------------
-                data = get_stock_history(stock_symbol, "max")
+                data = fetch_history(stock_symbol, "max")
 
-                if data.empty:
-                    st.error("Unable to fetch historical data.")
-                    st.stop()
-
-                # -------------------------------
-                # Extract values safely
-                # -------------------------------
-                company_name = info.get("longName", stock_symbol)
+                company_name = info.get("longName", "N/A")
                 exchange = info.get("exchange", "N/A")
                 currency = info.get("currency", "INR")
 
@@ -86,26 +74,16 @@ if stock_symbol:
                 six_month_data = data.last("6M")
                 one_year_data = data.last("1Y")
 
-                # Safe return calculations
-                try:
-                    six_month_return = (
-                        (current_price - six_month_data["Close"].iloc[0])
-                        / six_month_data["Close"].iloc[0]
-                    ) * 100
-                except:
-                    six_month_return = 0
+                six_month_return = (
+                    (current_price - six_month_data["Close"].iloc[0])
+                    / six_month_data["Close"].iloc[0]
+                ) * 100
 
-                try:
-                    one_year_return = (
-                        (current_price - one_year_data["Close"].iloc[0])
-                        / one_year_data["Close"].iloc[0]
-                    ) * 100
-                except:
-                    one_year_return = 0
+                one_year_return = (
+                    (current_price - one_year_data["Close"].iloc[0])
+                    / one_year_data["Close"].iloc[0]
+                ) * 100
 
-                # -------------------------------
-                # UI Output (UNCHANGED)
-                # -------------------------------
                 st.subheader("Company Information")
                 st.write(f"Company Name: {company_name}")
                 st.write(f"Exchange: {exchange}")
