@@ -9,7 +9,7 @@ st.write("⚠️ Use NSE format only (Example: RELIANCE.NS)")
 
 
 # ✅ Cached + Retry function for INFO
-@st.cache_data(ttl=3600)  # cache for 1 hour
+@st.cache_data(ttl=300)  # cache for 5 minutes
 def fetch_info_with_retry(symbol, retries=3, delay=2):
     stock = yf.Ticker(symbol)
 
@@ -28,7 +28,7 @@ def fetch_info_with_retry(symbol, retries=3, delay=2):
 
 
 # ✅ Cached price data
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=300)
 def fetch_history(symbol, period):
     stock = yf.Ticker(symbol)
     return stock.history(period=period)
