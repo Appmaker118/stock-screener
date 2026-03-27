@@ -3,13 +3,13 @@ import yfinance as yf
 import pandas as pd
 import time
 
-st.title("Personal Stock Screening Tool")
+st.title("Stock Screening Tool")
 
 st.write("⚠️ Use NSE format only (Example: RELIANCE.NS)")
 
 
-# ✅ Cached + Retry function for INFO
-@st.cache_data(ttl=300)  # cache for 5 minutes
+# ✅ Cached + Retry function
+@st.cache_data(ttl=3600)
 def fetch_info_with_retry(symbol, retries=3, delay=2):
     stock = yf.Ticker(symbol)
 
@@ -28,7 +28,7 @@ def fetch_info_with_retry(symbol, retries=3, delay=2):
 
 
 # ✅ Cached price data
-@st.cache_data(ttl=300)
+@st.cache_data(ttl=3600)
 def fetch_history(symbol, period):
     stock = yf.Ticker(symbol)
     return stock.history(period=period)
@@ -38,51 +38,39 @@ stock_symbol = st.text_input("Enter Stock Symbol").upper().strip()
 
 if stock_symbol:
 
-    # Strict rule: Must end with .NS
     if not stock_symbol.endswith(".NS"):
         st.error("Invalid format. Use NSE format like RELIANCE.NS")
     else:
 
-        # ✅ Fetch info (cached + retry)
         info = fetch_info_with_retry(stock_symbol)
 
         if not info:
             st.error("Unable to fetch stock information (API issue). Please try again.")
             st.stop()
 
-        # ✅ Validation
         if not info.get("regularMarketPrice") or not info.get("longName"):
             st.error("Invalid or unsupported stock symbol.")
         else:
-            # Check recent trading activity
             recent_data = fetch_history(stock_symbol, "10d")
 
             if recent_data.empty:
                 st.error("Stock not actively trading or invalid.")
             else:
-                data = fetch_history(stock_symbol, "max")
+                # ✅ CHANGED: 5 YEAR DATA ONLY
+                data = fetch_history(stock_symbol, "5y")
 
                 company_name = info.get("longName", "N/A")
                 exchange = info.get("exchange", "N/A")
                 currency = info.get("currency", "INR")
 
                 current_price = data["Close"].iloc[-1]
-                ath = data["Close"].max()
 
-                distance_from_ath = ((ath - current_price) / ath) * 100
+                # ✅ 5Y HIGH & LOW
+                high_5y = data["Close"].max()
+                low_5y = data["Close"].min()
 
-                six_month_data = data.last("6M")
-                one_year_data = data.last("1Y")
-
-                six_month_return = (
-                    (current_price - six_month_data["Close"].iloc[0])
-                    / six_month_data["Close"].iloc[0]
-                ) * 100
-
-                one_year_return = (
-                    (current_price - one_year_data["Close"].iloc[0])
-                    / one_year_data["Close"].iloc[0]
-                ) * 100
+                distance_from_high = ((high_5y - current_price) / high_5y) * 100
+                distance_from_low = ((current_price - low_5y) / low_5y) * 100
 
                 st.subheader("Company Information")
                 st.write(f"Company Name: {company_name}")
@@ -91,32 +79,30 @@ if stock_symbol:
 
                 st.subheader("Stock Data")
                 st.write(f"Current Price: {current_price:.2f} {currency}")
-                st.write(f"All Time High: {ath:.2f} {currency}")
-                st.write(f"Distance from ATH: {distance_from_ath:.2f}%")
-                st.write(f"6 Month Return: {six_month_return:.2f}%")
-                st.write(f"1 Year Return: {one_year_return:.2f}%")
+                st.write(f"5 Year High: {high_5y:.2f} {currency}")
+                st.write(f"5 Year Low: {low_5y:.2f} {currency}")
+                st.write(f"Distance from High: {distance_from_high:.2f}%")
+                st.write(f"Distance from Low: {distance_from_low:.2f}%")
 
                 st.subheader("Condition Check")
 
-                if current_price < ath:
-                    st.success("✔ Not at All Time High")
+                # ❌ At High
+                if current_price < high_5y:
+                    st.success("✔ Not at 5Y High")
                 else:
-                    st.error("✘ At All Time High")
+                    st.error("✘ At 5Y High")
 
-                if distance_from_ath > 5:
-                    st.success("✔ Not near ATH (more than 5% away)")
+                # ✅ Far from High (>10%)
+                if distance_from_high > 10:
+                    st.success("✔ Far from High (>10% away)")
                 else:
-                    st.error("✘ Near ATH")
+                    st.error("✘ Too close to High")
 
-                if six_month_return > 0:
-                    st.success("✔ 6 Month Trend Positive")
+                # ✅ Near Low (<20%)
+                if distance_from_low < 20:
+                    st.success("✔ Near 5Y Low (fallen stock)")
                 else:
-                    st.error("✘ 6 Month Trend Negative")
+                    st.error("✘ Not near Low")
 
-                if one_year_return > 0:
-                    st.success("✔ 1 Year Trend Positive")
-                else:
-                    st.error("✘ 1 Year Trend Negative")
-
-                st.subheader("Price Chart")
+                st.subheader("Price Chart (5 Years)")
                 st.line_chart(data["Close"])
